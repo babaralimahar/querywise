@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 
 from app.config import Settings
 
@@ -24,6 +24,9 @@ class QuerySettings(Settings):
     embed_provider: Literal["fake", "openai_compat"] = "fake"
     embed_model: str = "gemini-embedding-001"
     embed_dim: int = 768
+    # Embeddings can use a different provider than chat (e.g. Gemini embeddings + Groq chat).
+    embed_base_url: str | None = None
+    embed_api_key: SecretStr | None = None
 
     # Pipeline
     semantic_layer_path: str = "config/semantic_layer.yaml"

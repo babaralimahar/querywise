@@ -57,18 +57,37 @@ RESTRICTED_HINTS = ("zip", "customer_city", "comment", "passw", "pg_")
 
 
 class PacedLLM:
-    def __init__(self, inner: Any, rpm: float) -> None:
+    """Spaces LLM calls under a requests-per-minute cap, and waits out free-tier quota limits
+    (HTTP 429 per-minute or per-day token caps) instead of failing: a 429 storm would measure the
+    quota, not the system. Waits are bounded by max_wait_s and logged."""
+
+    def __init__(self, inner: Any, rpm: float, max_wait_s: float = 16 * 3600) -> None:
         self._inner, self._gap, self._next = inner, (60.0 / rpm if rpm > 0 else 0.0), 0.0
         self._lock = asyncio.Lock()
         self.model = getattr(inner, "model", "unknown")
+        self.max_wait_s = max_wait_s
+        self.waited_s = 0.0
 
     async def complete(self, messages: Any, **kw: Any) -> Any:
-        async with self._lock:
-            now = time.monotonic()
-            if self._next > now:
-                await asyncio.sleep(self._next - now)
-            self._next = time.monotonic() + self._gap
-        return await self._inner.complete(messages, **kw)
+        from app.adapters.llm import LLMTransient
+
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                if self._next > now:
+                    await asyncio.sleep(self._next - now)
+                self._next = time.monotonic() + self._gap
+            try:
+                return await self._inner.complete(messages, **kw)
+            except LLMTransient:
+                if self.waited_s >= self.max_wait_s:
+                    raise
+                print(
+                    f"[quota] provider busy or daily limit reached; waiting 120 s (total waited {self.waited_s / 60:.0f} min)",
+                    flush=True,
+                )
+                await asyncio.sleep(120)
+                self.waited_s += 120
 
 
 def score(x: dict[str, Any], ans: Answer, gold: list[tuple[Any, ...]] | None) -> dict[str, Any]:

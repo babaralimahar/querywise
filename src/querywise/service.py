@@ -23,11 +23,12 @@ from querywise.semantic import SemanticLayer
 def build_embedder(s: QuerySettings, sm: async_sessionmaker[AsyncSession] | None) -> CachedEmbedder:
     if s.embed_provider == "fake":
         return CachedEmbedder(FakeEmbedder(s.embed_dim), sm)
-    if s.llm_api_key is None:
-        raise ValueError("EMBED_PROVIDER=openai_compat needs LLM_API_KEY")
+    key = s.embed_api_key or s.llm_api_key
+    if key is None:
+        raise ValueError("EMBED_PROVIDER=openai_compat needs EMBED_API_KEY or LLM_API_KEY")
     inner = OpenAICompatEmbedder(
-        base_url=s.llm_base_url,
-        api_key=s.llm_api_key.get_secret_value(),
+        base_url=s.embed_base_url or s.llm_base_url,
+        api_key=key.get_secret_value(),
         model=s.embed_model,
         dim=s.embed_dim,
     )
