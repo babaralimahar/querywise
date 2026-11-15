@@ -1,0 +1,136 @@
+# QueryWise semantic layer: the ONLY tables, columns and metric definitions the generator may use.
+# The guard's allowlist is built from this file; restricted columns are listed so a block can
+# say why. Owner: data team. Changes go through review like code.
+schema: curated
+dialect: postgres
+max_rows: 500
+
+tables:
+  v_orders:
+    description: One row per order placed on the marketplace (2016-09 to 2018-08). Timestamps are local time.
+    columns:
+      order_id: Order identifier.
+      customer_id: Customer key for this order (one customer_id per order; use v_customers.customer_unique_id to count people).
+      order_status: "One of delivered, shipped, canceled, unavailable, invoiced, processing, approved, created."
+      purchased_at: When the order was placed. Use this for "orders in <month/year>" questions.
+      approved_at: When payment was approved (NULL if never approved).
+      delivered_carrier_at: When the seller handed the order to the carrier.
+      delivered_customer_at: When the customer received the order (NULL if not delivered).
+      estimated_delivery_at: Delivery date promised to the customer at purchase.
+  v_order_items:
+    description: One row per item in an order. An order can have several items, from different sellers.
+    columns:
+      order_id: Order the item belongs to.
+      order_item_id: Item number within the order (1, 2, ...).
+      product_id: Product sold.
+      seller_id: Seller who fulfils this item.
+      price: Item price in BRL (excludes freight).
+      freight_value: Freight charged for this item in BRL.
+      shipping_limit_at: Deadline for the seller to hand the item to the carrier.
+  v_payments:
+    description: One row per payment of an order. Orders can be paid in several parts (e.g. voucher + credit card).
+    columns:
+      order_id: Order paid.
+      payment_sequential: Payment number within the order.
+      payment_type: "One of credit_card, boleto, voucher, debit_card."
+      payment_installments: Number of instalments chosen (credit card); 1 otherwise.
+      payment_value: Amount paid in BRL (price + freight across the order's items).
+  v_products:
+    description: Product catalogue.
+    columns:
+      product_id: Product identifier.
+      category: Product category in English (e.g. bed_bath_table, health_beauty). NULL for some products.
+      category_pt: Original Portuguese category name.
+      weight_g: Product weight in grams.
+      photos_qty: Number of photos in the listing.
+  v_customers:
+    description: Customer record per order. customer_unique_id identifies a person across orders.
+    sensitive: true  # no SELECT * : list the columns you need
+    columns:
+      customer_id: Key joined from v_orders.customer_id.
+      customer_unique_id: Identifies the same person across orders. Count DISTINCT of this for "customers".
+      customer_state: Two-letter Brazilian state code (SP, RJ, MG, ...).
+  v_sellers:
+    description: Marketplace sellers.
+    columns:
+      seller_id: Seller identifier.
+      seller_city: Seller's city (free text, lower case).
+      seller_state: Two-letter Brazilian state code.
+  v_reviews:
+    description: Customer review of an order (score 1-5). Comments are not available.
+    columns:
+      review_id: Review identifier.
+      order_id: Order reviewed.
+      review_score: 1 (worst) to 5 (best).
+      created_at: Date the review was submitted.
+
+# Columns that exist in the source system but are NOT exposed. Asking for them is blocked.
+restricted:
+  customer_zip_code_prefix: customer location is personal data
+  customer_city: customer location is personal data
+  review_comment_message: free-text comments contain phone numbers and names
+  seller_zip_code_prefix: not needed for analytics
+
+joins:  # the only approved join paths
+  - [v_orders.customer_id, v_customers.customer_id]
+  - [v_order_items.order_id, v_orders.order_id]
+  - [v_order_items.product_id, v_products.product_id]
+  - [v_order_items.seller_id, v_sellers.seller_id]
+  - [v_payments.order_id, v_orders.order_id]
+  - [v_reviews.order_id, v_orders.order_id]
+
+# Approved metric definitions. "Revenue" means the same thing everywhere.
+metrics:
+  revenue:
+    description: Sum of item prices (BRL, excluding freight) of orders that were not canceled or unavailable.
+    sql: SUM(oi.price)
+    from: v_order_items oi JOIN v_orders o ON o.order_id = oi.order_id
+    filter: o.order_status NOT IN ('canceled', 'unavailable')
+  gmv:
+    description: Gross merchandise value = item price + freight, same order filter as revenue.
+    sql: SUM(oi.price + oi.freight_value)
+    from: v_order_items oi JOIN v_orders o ON o.order_id = oi.order_id
+    filter: o.order_status NOT IN ('canceled', 'unavailable')
+  orders:
+    description: Number of distinct orders that were not canceled or unavailable.
+    sql: COUNT(DISTINCT o.order_id)
+    from: v_orders o
+    filter: o.order_status NOT IN ('canceled', 'unavailable')
+  average_order_value:
+    description: Revenue divided by orders (same filters).
+    sql: SUM(oi.price) / COUNT(DISTINCT o.order_id)
+    from: v_order_items oi JOIN v_orders o ON o.order_id = oi.order_id
+    filter: o.order_status NOT IN ('canceled', 'unavailable')
+  customers:
+    description: Distinct people (customer_unique_id) with at least one non-canceled order.
+    sql: COUNT(DISTINCT c.customer_unique_id)
+    from: v_orders o JOIN v_customers c ON c.customer_id = o.customer_id
+    filter: o.order_status NOT IN ('canceled', 'unavailable')
+  average_review_score:
+    description: Mean review_score over reviews.
+    sql: AVG(r.review_score)
+    from: v_reviews r
+  late_delivery_rate:
+    description: Share of delivered orders (delivered_customer_at not NULL) that arrived after estimated_delivery_at.
+    sql: AVG(CASE WHEN o.delivered_customer_at > o.estimated_delivery_at THEN 1.0 ELSE 0.0 END)
+    from: v_orders o
+    filter: o.order_status = 'delivered' AND o.delivered_customer_at IS NOT NULL
+  average_delivery_days:
+    description: Mean days from purchase to customer delivery, delivered orders only.
+    sql: AVG(EXTRACT(EPOCH FROM (o.delivered_customer_at - o.purchased_at)) / 86400)
+    from: v_orders o
+    filter: o.order_status = 'delivered' AND o.delivered_customer_at IS NOT NULL
+  cancellation_rate:
+    description: Share of all orders with status canceled.
+    sql: AVG(CASE WHEN o.order_status = 'canceled' THEN 1.0 ELSE 0.0 END)
+    from: v_orders o
+  average_freight:
+    description: Mean freight_value per item, non-canceled orders.
+    sql: AVG(oi.freight_value)
+    from: v_order_items oi JOIN v_orders o ON o.order_id = oi.order_id
+    filter: o.order_status NOT IN ('canceled', 'unavailable')
+  amount_paid:
+    description: Total payments received (all payment types), non-canceled orders.
+    sql: SUM(p.payment_value)
+    from: v_payments p JOIN v_orders o ON o.order_id = p.order_id
+    filter: o.order_status NOT IN ('canceled', 'unavailable')

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Ask · QueryWise{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/vega@5.30.0/build/vega.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-lite@5.21.0/build/vega-lite.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-embed@6.26.0/build/vega-embed.min.js"></script>
+{% endblock %}
+{% block body %}
+<h1>Ask the warehouse</h1>
+<p class="muted">Read-only, guarded SQL over the curated e-commerce views (2016-09 to 2018-08, BRL). "Revenue" and other metrics use the approved definitions on the <a href="/ui/schema">schema page</a>.</p>
+<form class="panel" hx-post="/ui/ask" hx-target="#answer" hx-indicator="#busy" style="display:grid;gap:10px;margin-bottom:18px">
+  <input type="hidden" name="conversation_id" value="{{ conversation_id }}">
+  <textarea name="question" rows="2" required style="width:100%" placeholder="e.g. Monthly revenue in 2018">{{ sample }}</textarea>
+  <div><button type="submit">Ask</button> <span id="busy" class="htmx-indicator muted">thinking…</span>
+    <span class="muted">Follow-up questions in this page reuse the previous query as context.</span></div>
+  <div class="muted">Try: <i>Top 5 categories by revenue in 2018</i> · <i>Late delivery rate per month in 2018</i> · <i>Who are our best customers?</i> · <i>List the zip codes of our top customers</i></div>
+</form>
+<div id="answer"></div>
+{% endblock %}

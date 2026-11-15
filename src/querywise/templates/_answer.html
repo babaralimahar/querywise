@@ -1,0 +1,28 @@
+<div class="panel">
+  <p style="margin-top:0"><b>{{ a.question }}</b>
+    <span class="pill s-{{ 'approved' if a.status == 'answered' else ('needs_review' if a.status in ('needs_clarification', 'empty') else 'rejected') }}">{{ a.status.replace('_', ' ') }}</span>
+    {% if a.cached %}<span class="muted">(cached)</span>{% endif %}</p>
+
+  {% if a.status == 'needs_clarification' %}
+    <p>{{ a.clarification_question }}</p>
+    <div class="opts">{% for o in a.options %}
+      <button hx-post="/ui/ask" hx-target="#answer" hx-vals='{"question": {{ (a.question ~ " (" ~ o ~ ")") | tojson }}, "conversation_id": {{ conversation_id | tojson }}}'>{{ o }}</button>
+    {% endfor %}</div>
+  {% elif a.status in ('blocked', 'refused', 'failed') %}
+    <p class="note err"><b>{{ a.reason }}</b>: {{ a.detail }}</p>
+    {% if a.sql %}<pre class="sql">{{ a.sql }}</pre>{% endif %}
+  {% else %}
+    {% if a.summary %}<p>{{ a.summary }}{% if a.summary_verified == False %} <span class="muted">(template: the model's wording contained unverified numbers)</span>{% endif %}</p>{% endif %}
+    {% if a.chart %}<div id="chart-{{ qid }}"></div>
+      <script>vegaEmbed("#chart-{{ qid }}", {{ a.chart | tojson }}, {actions: false});</script>{% endif %}
+    <div class="scroll"><table>
+      <thead><tr>{% for c in a.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for r in a.rows[:50] %}<tr>{% for v in r %}<td>{{ fmt(v) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+    {% if a.rows | length > 50 %}<p class="muted">Showing 50 of {{ a.rows | length }} rows.</p>{% endif %}
+  {% endif %}
+
+  {% if a.assumptions %}<h3>Assumptions</h3><ul>{% for x in a.assumptions %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  {% if a.sql and a.status in ('answered', 'empty') %}<h3>SQL (guarded, run as analyst_ro)</h3><pre class="sql">{{ a.sql }}</pre>{% endif %}
+  <p class="muted">query #{{ qid }} · {% for k, v in a.timings_ms.items() %}{{ k }} {{ v }} ms · {% endfor %}{{ a.tokens_in + a.tokens_out }} tokens</p>
+</div>

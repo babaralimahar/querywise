@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Schema · QueryWise{% endblock %}
+{% block body %}
+<h1>Curated schema and metric definitions</h1>
+<h2>Metrics</h2>
+<div class="panel scroll"><table>
+  <thead><tr><th>Metric</th><th>Definition</th><th>SQL</th></tr></thead>
+  <tbody>{% for m in layer.metrics.values() %}<tr><td><b>{{ m.name }}</b></td><td>{{ m.description }}</td><td><code>{{ m.sql }}</code>{% if m.filter %}<br><span class="muted">WHERE {{ m.filter }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+</table></div>
+<h2>Views</h2>
+{% for t, spec in layer.tables.items() %}
+<div class="panel" style="margin-bottom:12px"><b>{{ layer.schema }}.{{ t }}</b> — {{ spec.description }}
+  <ul>{% for c, d in spec.columns.items() %}<li><code>{{ c }}</code>: {{ d }}</li>{% endfor %}</ul></div>
+{% endfor %}
+<h2>Restricted (never exposed)</h2>
+<ul>{% for c, why in layer.restricted.items() %}<li><code>{{ c }}</code>: {{ why }}</li>{% endfor %}</ul>
+{% endblock %}
