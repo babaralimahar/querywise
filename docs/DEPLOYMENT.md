@@ -3,7 +3,9 @@
 Target: **Render free web service** (Docker) + **Neon free Postgres**, the same as P1-P3. No paid
 services.
 
-> Status: **not deployed yet.** All five projects get deployed together at the end.
+> Status: **live** at https://querywise-wo6g.onrender.com (Render free, Singapore; Neon free
+> Postgres 17). Warehouse loaded and `analyst_ro` created from a local machine; checked that
+> `analyst_ro` cannot write.
 
 ## Steps
 

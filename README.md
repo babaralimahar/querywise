@@ -4,6 +4,10 @@
 from a database connection that cannot write, cannot see personal data, and cannot run for more
 than 5 seconds.**
 
+**Live demo:** https://querywise-wo6g.onrender.com/ui (free hosting: the first visit after idling
+can take about a minute to wake up). Demo key on request. Runs on Gemini's free tier (500
+requests/day, 2 per question).
+
 Ops and finance analysts wait days for the data team to write ad-hoc SQL, and when they write
 it themselves, "revenue" means three different things. QueryWise translates questions into SQL
 grounded in an approved **semantic layer** (metric definitions), runs it behind **three
@@ -97,7 +101,7 @@ and returns plausible numbers (late-delivery rate 6.5%, mean delivery 13.5 days)
 ## Design notes
 
 - [ADR 0006: three independent safety layers; the LLM only writes SQL text](docs/adr/0006-guard-role-cost-defence-in-depth.md)
-- [Threat model](docs/THREAT_MODEL.md) · [Deployment](docs/DEPLOYMENT.md) (not deployed yet)
+- [Threat model](docs/THREAT_MODEL.md) · [Deployment](docs/DEPLOYMENT.md) (live on Render free + Neon free)
 
 **Limits, stated plainly:** English questions only; no row-level security per analyst (next step:
 Postgres RLS keyed on a session variable); the result cache is per database, not per user
